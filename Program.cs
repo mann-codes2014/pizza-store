@@ -26,7 +26,7 @@ app.UseSwaggerUI(c =>
 });
 
 app.MapGet("/", () => "Welcome to Pizza Store!");
-PizzaEndpoints.MapEndpoints(app);
+app.MapPizzaEndpoints();
 
 
 app.Run();
