@@ -1,39 +1,52 @@
 using Microsoft.EntityFrameworkCore;
+using PizzaStore.Dtos;
 using PizzaStore.Models;
+using PizzaStore.Repositories;
 
 namespace PizzaStore.Endpoints
 {
     public static class PizzaEndpoints
     {
-        public static void MapPizzaEndpoints(this IEndpointRouteBuilder endpoints)
-        {
-            var group = endpoints.MapGroup("/pizzas");
+        const string GetPizzaNameEndpointName = "GetPizza";
 
-            group.MapGet("/", async (PizzaDb db) => await db.Pizzas.ToListAsync());
-            group.MapPost("/", async (PizzaDb db, Pizza pizza) =>
+        public static RouteGroupBuilder MapPizzaEndpoints(this IEndpointRouteBuilder endpoints)
+        {
+            var group = endpoints.MapGroup("/pizzas").WithParameterValidation();
+
+            group.MapGet("/", (IPizzasRepository repository) => repository.GetAll().Select(game => game.AsDto()));
+            group.MapPost("/", (IPizzasRepository repository, CreatePizzaDto pizzaDto) =>
             {
-                await db.Pizzas.AddAsync(pizza);
-                await db.SaveChangesAsync();
-                return Results.Created($"/{pizza.Id}", pizza);
+                Pizza pizza = new()
+                {
+                    Name = pizzaDto.Name,
+                    Description = pizzaDto.Description,
+
+                };
+                repository.Create(pizza);
+                return Results.CreatedAtRoute(GetPizzaNameEndpointName, new { id = pizza.Id }, pizza);
             });
-            group.MapGet("/{id}", async (PizzaDb db, int id) => await db.Pizzas.FindAsync(id));
-            group.MapPut("/{id}", async (PizzaDb db, Pizza updatepizza, int id) =>
+            group.MapGet("/{id}", (IPizzasRepository repository, int id) =>
             {
-                var pizza = await db.Pizzas.FindAsync(id);
+                Pizza? pizza = repository.Get(id);
+                return pizza is not null ? Results.Ok(pizza.AsDto()) : Results.NotFound();
+            }).WithName(GetPizzaNameEndpointName);
+            group.MapPut("/{id}", (IPizzasRepository repository, Pizza updatepizza, int id) =>
+            {
+                var pizza = repository.Get(id);
                 if (pizza is null) return Results.NotFound();
                 pizza.Name = updatepizza.Name;
                 pizza.Description = updatepizza.Description;
-                await db.SaveChangesAsync();
+                repository.Update(pizza);
                 return Results.NoContent();
             });
-            group.MapDelete("/{id}", async (PizzaDb db, int id) =>
+            group.MapDelete("/{id}", (IPizzasRepository repository, int id) =>
             {
-                var pizza = await db.Pizzas.FindAsync(id);
+                var pizza = repository.Get(id);
                 if (pizza is null) return Results.NotFound();
-                db.Pizzas.Remove(pizza);
-                await db.SaveChangesAsync();
+                repository.Delete(id);
                 return Results.Ok();
             });
+            return group;
         }
     }
 }
